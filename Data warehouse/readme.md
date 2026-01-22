@@ -30,40 +30,25 @@ ODS（Operational Data Store）层作为数据仓库的贴源层，主要职责�
 
 ### 2.1 核心设计：车辆实时轨迹宽表
 
-为解决 GB/T 32960 协议中整车、电机、电池等多包频发导致的小文件问题，将相关流数据合并为一张宽表。
+为解决 GB/T 32960 协议中整车、电机、电池等多数据包高频上报带来的小文件与多表 Join 问题，本文在 ODS 层对相关流式日志进行聚合建模，设计车辆实时轨迹宽表，用于统一承载车辆运行过程中的核心状态信息。
 
-| 表名 | **`ods_log_vehicle_track_inc`** |
+| 项目 | 内容 |
 | --- | --- |
-| **描述** | 车辆实时综合轨迹日志表，涵盖行驶、三电状态、报警等核心数据。 |
-| **主要字段** | **Common**: `vin`, `collect_time` <br>
+| **表名** | **`ods_log_vehicle_track_inc`** |
+| **描述** | 车辆实时综合轨迹日志表，涵盖行驶状态、三电系统状态、报警信息及地理位置等核心数据 |
+| **主要字段** | **Common**：`vin`, `collect_time`<br/>**Vehicle**：`speed`, `odometer`, `status`, `soc`, `total_voltage`<br/>**Motor**：`ARRAY<STRUCT>`（电机转速、转矩、温度等）<br/>**BMS**：`pack_voltage`, `pack_current`, `cell_volt_list`（单体电压数组）, `probe_temp_list`（探针温度数组）<br/>**Alarm**：`alarm_level`, `fault_codes`（故障码列表）<br/>**Location**：`lat`, `lon`, `gps_status` |
+| **用途** | 行车安全分析（超速、动力系统异常）、电池安全分析（压差异常、热失控预警）、车辆轨迹回放与事故追溯 |
 
-<br>**Vehicle**: `speed`, `odometer`, `status`, `soc`, `total_voltage`<br>
-
-<br>**Motor**: `ARRAY<STRUCT>` (电机转速/转矩/温度)<br>
-
-<br>**BMS**: `pack_voltage`, `pack_current`, `cell_volt_list` (单体电压数组), `probe_temp_list` (探针温度数组)<br>
-
-<br>**Alarm**: `alarm_level`, `fault_codes` (故障码列表)<br>
-
-<br>**Location**: `lat`, `lon`, `gps_status` |
-| **用途** | 行车安全分析（超速/故障）、电池安全分析（压差/热失控）、轨迹回放。 |
 
 ### 2.2 事件与流水表
 
 | 表名 | 描述 | 关键字段 | 用途 |
 | --- | --- | --- | --- |
-| **`ods_log_vehicle_sys_inc`** | **系统事件流水表**<br>
+| **`ods_log_vehicle_sys_inc`** | **系统事件流水表**（合并登入、登出、终端异常） | `vin`, `event_type`(LOGIN/LOGOUT/ERROR), `iccid`, `duration` | 计算车辆在线率、T-BOX 稳定性监控 |
+| **`ods_log_safety_risk_inc`** | **安全预警事件表**（记录急刹、急转、疲劳驾驶等瞬时事件） | `vin`, `risk_type`(HARD_BRAKE/FATIGUE), `g_value`, `start_speed`, `end_speed` | 驾驶行为评分、用户安全画像 |
+| **`ods_log_charging_session_inc`** | **充电行程结算表**（记录一次完整充电的起止状态） | `vin`, `session_id`, `station_id`, `charged_energy`, `start_soc`, `end_soc` | 充电桩利用率分析、充电异常中断分析 |
+| **`ods_log_app_feedback_inc`** | **用户 APP 反馈表**（用户主动上传的日志/图片） | `user_id`, `vin`, `content`, `media_urls`, `feedback_type` | 舆情监控、故障辅助诊断 |
 
-<br>合并登入、登出、终端异常。 | `vin`, `event_type` (LOGIN/LOGOUT/ERROR), `iccid`, `duration` | 计算车辆在线率、T-BOX 稳定性监控。 |
-| **`ods_log_safety_risk_inc`** | **安全预警事件表**<br>
-
-<br>记录急刹、急转、疲劳驾驶等瞬时事件。 | `vin`, `risk_type` (HARD_BRAKE/FATIGUE), `g_value`, `start_speed`, `end_speed` | 驾驶行为评分、用户安全画像。 |
-| **`ods_log_charging_session_inc`** | **充电行程结算表**<br>
-
-<br>记录一次完整充电的起止状态。 | `vin`, `session_id`, `station_id`, `charged_energy`, `start_soc`, `end_soc` | 充电桩利用率分析、充电异常中断分析。 |
-| **`ods_log_app_feedback_inc`** | **用户APP反馈表**<br>
-
-<br>用户主动上传的日志/图片。 | `user_id`, `vin`, `content`, `media_urls`, `feedback_type` | 舆情监控、故障辅助诊断。 |
 
 ---
 
