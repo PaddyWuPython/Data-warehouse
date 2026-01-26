@@ -123,7 +123,6 @@ SELECT
     t.lon / 1000000.0 AS lon,
     t.gps_status,
     CASE 
-        -- GPS漂移清洗规则
         WHEN t.lat = 0 OR t.lon = 0 THEN 0
         WHEN ABS(t.lat / 1000000.0) > 90 OR ABS(t.lon / 1000000.0) > 180 THEN 0
         WHEN t.gps_status = 1 THEN 0  -- GPS无效
